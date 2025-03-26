@@ -2,6 +2,7 @@ from utils import Condition
 
 import pickle
 from copy import deepcopy
+import random
 
 
 class Agent:
@@ -86,6 +87,25 @@ class QLearningAgent(Agent):
         state_tuple = tuple(tuple(convert(cell) for cell in sublist) for sublist in state)
         return state_tuple
 
+    def get_possible_actions(self, state):
+        """
+        Returns a list of valid actions (cell coordinates) based on the current state.
+        This implementation assumes that if a cell is an object with a 'revealed' attribute,
+        it is hidden if cell.revealed is False. Otherwise, if the cell is None or equals "H"
+        (as an example marker), it is considered hidden.
+        """
+        actions = []
+        for i in range(self.rows):
+            for j in range(self.cols):
+                cell = state[i][j]
+                if hasattr(cell, "revealed"):
+                    if not cell.revealed:
+                        actions.append((i, j))
+                else:
+                    if cell is None or (isinstance(cell, str) and cell == "H"):
+                        actions.append((i, j))
+        return self.game.actions(state)
+
     def get_action(self, state):
         """
         Chooses an action using epsilon-greedy based on the given state.
@@ -97,8 +117,27 @@ class QLearningAgent(Agent):
             Action: The chosen action.
         """
         # TODO: Implement the epsilon-greedy action selection, using self.epsilon to switch strategy
-        raise NotImplementedError()
-    
+        possible_actions = self.get_possible_actions(state)
+        if not possible_actions:
+            return None
+        # Exploration: choose a random action with probability epsilon.
+        if random.random() < self.epsilon:
+            return random.choice(possible_actions)
+        else:
+            state_tuple = self.state_to_tuple(state)
+            best_action = None
+            best_value = -float('inf')
+            for action in possible_actions:
+                a_key = self.action_to_tuple(action)
+                q_value = self.Q.get((state_tuple, a_key), 0)
+                if q_value > best_value:
+                    best_value = q_value
+                    best_action = action
+            return best_action if best_action is not None else random.choice(possible_actions)
+
+    def action_to_tuple(self, action):
+        return (action.action_type, action.x, action.y)
+
     def update_q_table(self, state, action, reward, next_state):
         """
         Updates the Q-table based on the given state, action, reward, and next state.
@@ -112,7 +151,19 @@ class QLearningAgent(Agent):
         state_tuple = self.state_to_tuple(state)
         next_state_tuple = self.state_to_tuple(next_state)
         # TODO: Implement the Q-learning update rule, using the state_tuple as the key for the Q-table
-        raise NotImplementedError()
+        a_key = self.action_to_tuple(action)
+        current_q = self.Q.get((state_tuple, a_key), 0)
+        # Use the game’s actions(state) method for valid next actions.
+        possible_actions_next = self.get_possible_actions(next_state)
+        if possible_actions_next:
+            max_future_q = max(
+                self.Q.get((next_state_tuple, self.action_to_tuple(a)), 0)
+                for a in possible_actions_next
+            )
+        else:
+            max_future_q = 0
+        new_q = current_q + self.alpha * (reward + self.gamma * max_future_q - current_q)
+        self.Q[(state_tuple, a_key)] = new_q
 
     def train(self, episodes, save_path=""):
         """
@@ -159,7 +210,24 @@ class QLearningAgent(Agent):
             state_tuple = self.state_to_tuple(state)
 
             # TODO: Implement action selection for testing, choose the best action (do not need exploration)
-            raise NotImplementedError()
-        
-            state, condition, _ = self.game.step(action)
-        return condition
+            print("Playing Minesweeper using Q-learning agent.")
+            state = self.game.reset()
+            condition = Condition.IN_PROGRESS
+            while condition == Condition.IN_PROGRESS:
+                state_tuple = self.state_to_tuple(state)
+                possible_actions = self.get_possible_actions(state)
+                if not possible_actions:
+                    break
+                best_action = None
+                best_value = -float('inf')
+                for action in possible_actions:
+                    a_key = self.action_to_tuple(action)
+                    q_value = self.Q.get((state_tuple, a_key), 0)
+                    if q_value > best_value:
+                        best_value = q_value
+                        best_action = action
+                if best_action is None:
+                    best_action = random.choice(possible_actions)
+                state, condition, _ = self.game.step(best_action)
+            return condition
+

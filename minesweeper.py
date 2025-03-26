@@ -52,9 +52,14 @@ class Minesweeper:
         Returns:
             int: The reward based on the given game condition.
         """
-        # TOOD: Implement the reward function
-        raise NotImplementedError()
-    
+        # TODO: Implement the reward function
+        if condition == Condition.WIN:
+            return 100  # Big positive reward for winning the game.
+        elif condition == Condition.BOMB:
+            return -100  # Negative reward for hitting a bomb.
+        else:
+            return 1  # Small positive reward for a safe move.
+
     def actions(self, state):
         """
         Returns the list of valid actions that can be taken in the current state.
